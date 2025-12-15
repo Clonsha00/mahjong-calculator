@@ -603,3 +603,4 @@ def show_result(win_tile, rw, sw, self_draw, fl, kb, lt, rk, ss, mode, base, per
 
 if __name__ == "__main__":
     main()
+
