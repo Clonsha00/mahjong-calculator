@@ -1,7 +1,7 @@
 import streamlit as st
 
 # ==========================================
-# 1. 演算法核心 (完全沿用 v19，無變動)
+# 1. 演算法核心 (保持不變)
 # ==========================================
 class MahjongLogic:
     TILES_34 = 34
@@ -159,7 +159,7 @@ class MahjongLogic:
         return has_valid, False
 
 # ==========================================
-# 2. 台數計算 (TaiCalculator)
+# 2. 台數計算 (TaiCalculator) (保持不變)
 # ==========================================
 class TaiCalculator:
     @staticmethod
@@ -296,9 +296,9 @@ def main():
     if 'multiplier' not in st.session_state: st.session_state.multiplier = 1
     
     # --- Mobile CSS 優化 ---
-    # 1. 調整按鈕大小與圓角
-    # 2. 減少頂部與側邊留白 (padding)
-    # 3. 調整 Tab 字體
+    # 修正重點：
+    # 1. 強制按鈕文字顏色為黑色 (解決 Dark Mode 看不見字的問題)
+    # 2. 調整按鈕間距與高度
     st.markdown("""
     <style>
     /* 全局間距縮減 */
@@ -309,23 +309,26 @@ def main():
         padding-right: 0.5rem;
     }
     
-    /* 按鈕樣式：更大、更好按 */
+    /* 按鈕樣式：強制黑字白底，避免深色模式看不見 */
     div.stButton > button {
         width: 100%;
-        height: 3.5rem;  /* 增加高度 */
-        border-radius: 12px; /* 圓角 */
-        font-size: 1.1rem;
-        font-weight: 600;
+        height: 3.2rem;
+        border-radius: 8px;
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #222222 !important; /* 強制深色文字 */
+        background-color: #f8f9fa !important; /* 強制亮色背景 */
+        border: 1px solid #ced4da !important;
         margin-bottom: 0.2rem;
+        transition: background-color 0.1s;
     }
     
-    /* 鍵盤區按鈕特別調整 */
-    div[data-testid="stHorizontalBlock"] div.stButton > button {
-        background-color: #f0f2f6;
-        border: 1px solid #d1d5db;
+    div.stButton > button:active {
+        background-color: #e2e6ea !important;
+        transform: scale(0.98);
     }
     
-    /* 手牌區塊樣式 */
+    /* 手牌區塊樣式 (深色背景相容) */
     .hand-display {
         background-color: #e8f4f8;
         padding: 10px;
@@ -333,17 +336,19 @@ def main():
         border: 2px solid #2e86de;
         margin-bottom: 10px;
         text-align: center;
+        color: #333; /* 確保內部文字顏色 */
     }
     .tile-span {
         display: inline-block;
         background: white;
         border: 1px solid #ccc;
         border-radius: 4px;
-        padding: 2px 5px;
+        padding: 2px 6px;
         margin: 2px;
         font-weight: bold;
         color: #333;
         font-size: 1.1em;
+        min-width: 1.8em;
     }
     .drawn-tile-span {
         background: #ff6b6b;
@@ -353,7 +358,7 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-    # st.title("🀄 麻將軍師") # 手機版標題可省略或縮小，節省空間
+    # st.title("🀄 麻將軍師") 
 
     # --- 1. 設定區 (預設收合) ---
     with st.expander("⚙️ 設定與規則 (點擊展開)", expanded=False):
@@ -369,7 +374,7 @@ def main():
                              format_func=lambda x: "正花正字" if x=="strict_flower" else "無花見字")
         
         st.write("🌺 **花牌**")
-        cols = st.columns(4) # 保持4列，手機會自動擠壓但這是CheckBox還好
+        cols = st.columns(4) 
         flowers = [False]*8
         f_labels = ["春", "夏", "秋", "冬", "梅", "蘭", "竹", "菊"]
         for i, label in enumerate(f_labels):
@@ -390,29 +395,24 @@ def main():
             st.rerun()
 
     # --- 2. 視覺化手牌區 (HUD) ---
-    # 計算總張數
     total_units = len(st.session_state.hand_tiles) + len(st.session_state.open_sets) * 3
     if st.session_state.drawn_tile is not None: total_units += 1
     
-    # 構建 HTML 字串
     display_hand = sorted(st.session_state.hand_tiles)
     hand_html = ""
     
-    # 明牌
     for s in st.session_state.open_sets:
         n = get_tile_name(s['tiles'][0])
         type_map = {'pong':'碰', 'kang':'槓', 'chow':'吃'}
         if s['type'] == 'chow':
-             n1, n2, n3 = [get_tile_name(t)[0] for t in s['tiles']] # 只取數字
+             n1, n2, n3 = [get_tile_name(t)[0] for t in s['tiles']]
              hand_html += f"<span class='tile-span' style='background:#ddd;'>{n1}{n2}{n3}</span>"
         else:
              hand_html += f"<span class='tile-span' style='background:#ddd;'>{n}{type_map[s['type']]}</span>"
     
-    # 手牌
     for t in display_hand:
         hand_html += f"<span class='tile-span'>{get_tile_name(t)}</span>"
     
-    # 摸牌
     if st.session_state.drawn_tile is not None:
         hand_html += f" &nbsp; <span class='tile-span drawn-tile-span'>{get_tile_name(st.session_state.drawn_tile)}</span>"
 
@@ -424,8 +424,8 @@ def main():
     """, unsafe_allow_html=True)
 
     # --- 3. 鍵盤輸入區 ---
-    st.caption("操作鍵盤")
-    tabs = st.tabs(["萬", "筒", "索", "字"])
+    # st.caption("操作鍵盤") # 省略標題節省空間
+    tabs = st.tabs(["萬子", "筒子", "索子", "字牌"])
     
     def add_tile(tid):
         current_u = len(st.session_state.hand_tiles) + len(st.session_state.open_sets) * 3
@@ -470,35 +470,34 @@ def main():
                         format_func=lambda x: {"normal":"手牌", "pong":"碰", "kang":"槓", "chow":"吃"}[x])
     
     with c_ctrl:
-        # 只顯示必要的控制
         if mode == "normal":
              multiplier = st.checkbox("連打", value=False)
              multiplier = 2 if multiplier else 1
         else:
              multiplier = 1
 
-    # 繪製鍵盤 (3x3 網格適合手機單手點擊)
+    # 繪製鍵盤 (重點修正：使用分列渲染，而非一大欄)
+    # 原本問題：一次生成 st.columns(3) 然後填入，導致手機上變成 3 個長長的垂直欄。
+    # 修正：每 3 個按鈕就生成一個新的 Row (st.columns(3))，確保視覺上一定是 3xN 網格。
     suits = [range(0,9), range(9,18), range(18,27), range(27,34)]
     for idx, suit_range in enumerate(suits):
         with tabs[idx]:
-            # 萬筒索用 3x3，字牌用 4+3
-            cols = st.columns(3) 
-            for i, tid in enumerate(suit_range):
-                # 字牌的中發白獨立一行
-                if idx == 3 and i >= 4: 
-                    # 重新分配列給中發白，使其美觀
-                    pass 
-                
-                label = get_tile_name(tid)
-                # 簡化字牌顯示
-                if len(label) > 1 and label.endswith("萬"): label = label # 1萬
-                
-                if cols[i%3].button(label, key=f"btn_{tid}"):
-                    add_tile(tid)
-                    st.rerun()
+            # 將 range 轉為 list 以便切片
+            tiles = list(suit_range)
+            # 每 3 個一組進行渲染
+            for i in range(0, len(tiles), 3):
+                row_tiles = tiles[i:i+3]
+                cols = st.columns(3)
+                for j, tid in enumerate(row_tiles):
+                    label = get_tile_name(tid)
+                    if len(label) > 1 and label.endswith("萬"): label = label # 保持原樣
+                    
+                    if cols[j].button(label, key=f"btn_{tid}"):
+                        add_tile(tid)
+                        st.rerun()
 
     # --- 4. 功能按鈕區 ---
-    st.write("") # Spacer
+    st.write("") 
     c_del, c_clr = st.columns(2)
     if c_del.button("⌫ 刪除一張", type="secondary"):
         if st.session_state.drawn_tile is not None:
@@ -518,27 +517,26 @@ def main():
     # --- 5. 智慧分析結果 ---
     st.markdown("---")
     
-    # 情境 A: 16張 (聽牌檢查)
     if total_units == 16 and st.session_state.drawn_tile is None:
         waiting = MahjongLogic.get_waiting_tiles(st.session_state.hand_tiles)
         if not waiting:
             st.info("尚未聽牌")
         else:
             st.success(f"🔥 聽牌：{len(waiting)} 洞")
-            # 聽牌按鈕矩陣
-            w_cols = st.columns(4)
-            for i, w in enumerate(waiting):
-                if w_cols[i%4].button(f"胡 {get_tile_name(w)}", type="primary"):
-                    show_result(w, round_wind, seat_wind, is_self_draw, flowers, 
-                                is_kong_bloom, is_last_tile, is_robbing_kong, is_seven_snatch,
-                                rule_mode, base_money, tai_money)
+            # 修正：聽牌結果也使用分列渲染，避免跑版
+            for i in range(0, len(waiting), 4):
+                w_row = waiting[i:i+4]
+                w_cols = st.columns(4)
+                for j, w in enumerate(w_row):
+                    if w_cols[j].button(f"胡 {get_tile_name(w)}", key=f"win_{w}", type="primary"):
+                        show_result(w, round_wind, seat_wind, is_self_draw, flowers, 
+                                    is_kong_bloom, is_last_tile, is_robbing_kong, is_seven_snatch,
+                                    rule_mode, base_money, tai_money)
 
-    # 情境 B: 17張 (自摸/捨牌)
     elif total_units == 17 and st.session_state.drawn_tile is not None:
         full_hand = st.session_state.hand_tiles + [st.session_state.drawn_tile]
         full_hand.sort()
         
-        # 1. 檢查自摸
         c_counts = [0]*34
         for t in full_hand: c_counts[t] += 1
         
@@ -550,7 +548,6 @@ def main():
                             rule_mode, base_money, tai_money)
             st.markdown("---")
 
-        # 2. 捨牌建議
         st.subheader("💡 捨牌建議")
         sug = MahjongLogic.analyze_discard_options(full_hand)
         if not sug:
@@ -564,7 +561,6 @@ def main():
                 with st.container():
                     col1, col2 = st.columns([1, 4])
                     if col1.button(f"打{d_name}", key=f"dis_{opt['discard']}"):
-                        # 模擬打牌
                         if st.session_state.drawn_tile == opt['discard']:
                             st.session_state.drawn_tile = None
                         elif opt['discard'] in st.session_state.hand_tiles:
@@ -588,11 +584,9 @@ def show_result(win_tile, rw, sw, self_draw, fl, kb, lt, rk, ss, mode, base, per
     
     tai, logs, is_8 = TaiCalculator.calculate(st.session_state.hand_tiles, st.session_state.open_sets, win_tile, env, rule)
     
-    # 算錢
     unit = base + (tai * per_tai)
     final_self_draw = self_draw or is_8 
     
-    # 使用 Bottom Sheet 概念或 Modal 顯示結果
     with st.expander("📝 結算詳情", expanded=True):
         st.markdown(f"### 🀄 胡：{get_tile_name(win_tile)}")
         col_res1, col_res2 = st.columns(2)
