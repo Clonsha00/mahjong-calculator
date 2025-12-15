@@ -1,7 +1,7 @@
 import streamlit as st
 
 # ==========================================
-# 1. 演算法核心 (保持不變)
+# 1. 演算法核心 (完全保持不變)
 # ==========================================
 class MahjongLogic:
     TILES_34 = 34
@@ -276,10 +276,9 @@ class TaiCalculator:
         return False
 
 # ==========================================
-# 3. Streamlit 介面 (Mobile Friendly Optimized)
+# 3. Streamlit 介面 (CSS 強制修正版)
 # ==========================================
 def get_tile_name(tid, simple=False):
-    # 簡化顯示
     if tid < 9: return f"{tid+1}萬"
     elif tid < 18: return f"{tid-8}筒"
     elif tid < 27: return f"{tid-17}索"
@@ -295,7 +294,9 @@ def main():
     if 'input_mode' not in st.session_state: st.session_state.input_mode = "normal"
     if 'multiplier' not in st.session_state: st.session_state.multiplier = 1
     
-    # --- CSS: 修正按鈕字體顏色與九宮格佈局 ---
+    # --- CSS: 核彈級強制橫排修正 ---
+    # 原因：Streamlit 手機版會用 media query 強制把 flex-direction 設為 column。
+    # 解法：我們針對所有 stHorizontalBlock (並排容器) 強制設為 row !important，並鎖死 column 寬度。
     st.markdown("""
     <style>
     /* 縮減邊界 */
@@ -306,23 +307,41 @@ def main():
         padding-right: 0.5rem;
     }
     
-    /* 按鈕樣式 (強制顯色)：白底黑字，確保 Dark Mode 可見 */
+    /* 【核彈級修正】強制所有水平區塊在手機上保持水平排列 
+       這會覆寫 Streamlit 預設的手機版垂直堆疊行為
+    */
+    [data-testid="stHorizontalBlock"] {
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        overflow-x: hidden !important; /* 避免橫向卷軸 */
+    }
+
+    /* 【核彈級修正】強制欄位寬度平均分配，不允許換行
+       設定 flex-basis 為 0 並允許成長，確保 3 個按鈕平分寬度
+    */
+    [data-testid="column"] {
+        flex: 1 1 0px !important;
+        min-width: 0px !important;
+        width: auto !important;
+        padding: 0px 2px !important; /* 稍微縮小間距 */
+    }
+    
+    /* 按鈕樣式：白底黑字，避免 Dark Mode 看不見 */
     div.stButton > button {
-        width: 100%;
-        height: 3.5rem;
-        border-radius: 8px;
-        font-size: 1.3rem; /* 字體加大 */
-        font-weight: 700;
+        width: 100% !important;
+        height: 3.5rem !important;
+        border-radius: 8px !important;
+        font-size: 1.1rem !important; /* 字體稍微縮小以防跑版 */
+        font-weight: 700 !important;
+        padding: 0px !important; /* 去除內距以塞入更多字 */
         
-        /* 關鍵修正：強制顏色，無視主題設定 */
+        /* 強制顏色 */
         color: #000000 !important; 
         background-color: #f0f2f6 !important;
         border: 1px solid #d1d5db !important;
-        
-        margin-bottom: 0.2rem;
+        margin-bottom: 0.2rem !important;
     }
     
-    /* 按下效果 */
     div.stButton > button:active {
         background-color: #e2e6ea !important;
         transform: scale(0.98);
@@ -336,19 +355,19 @@ def main():
         border: 2px solid #2e86de;
         margin-bottom: 10px;
         text-align: center;
-        color: #333; /* 確保內部文字顏色 */
+        color: #333; 
     }
     .tile-span {
         display: inline-block;
         background: white;
         border: 1px solid #ccc;
         border-radius: 4px;
-        padding: 2px 6px;
-        margin: 2px;
+        padding: 2px 5px; /* 縮小 padding */
+        margin: 1px;
         font-weight: bold;
         color: #333;
-        font-size: 1.1em;
-        min-width: 1.8em;
+        font-size: 1.0em;
+        min-width: 1.5em;
     }
     .drawn-tile-span {
         background: #ff6b6b;
@@ -421,7 +440,7 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    # --- 3. 鍵盤輸入區 (九宮格優化版) ---
+    # --- 3. 鍵盤輸入區 ---
     tabs = st.tabs(["萬子", "筒子", "索子", "字牌"])
     
     def add_tile(tid):
@@ -473,21 +492,19 @@ def main():
         else:
              multiplier = 1
 
-    # --- 關鍵修正：九宮格渲染邏輯 ---
+    # --- 渲染鍵盤 (維持 Row 邏輯 + 強力 CSS) ---
     suits = [range(0,9), range(9,18), range(18,27), range(27,34)]
     
     for idx, suit_range in enumerate(suits):
         with tabs[idx]:
-            # 將 range 轉為 list
             tiles = list(suit_range)
-            # 每 3 個一組，建立一列 (Row)
-            # 這樣可以保證 1,2,3 永遠在同一層，不會變成垂直 1,4,7
+            # 每 3 個按鈕放進一個 st.columns(3)
+            # 依賴上方的 [data-testid="stHorizontalBlock"] CSS 讓它們不准換行
             for i in range(0, len(tiles), 3):
                 row_tiles = tiles[i:i+3]
-                cols = st.columns(3) # 建立 3 個並排的欄位
+                cols = st.columns(3) 
                 for j, tid in enumerate(row_tiles):
                     label = get_tile_name(tid)
-                    # 這裡按鈕使用 cols[j] 填入，確保水平排列
                     if cols[j].button(label, key=f"btn_{tid}"):
                         add_tile(tid)
                         st.rerun()
@@ -519,7 +536,6 @@ def main():
             st.info("尚未聽牌")
         else:
             st.success(f"🔥 聽牌：{len(waiting)} 洞")
-            # 聽牌結果也使用 Row 邏輯渲染
             for i in range(0, len(waiting), 4):
                 w_row = waiting[i:i+4]
                 w_cols = st.columns(4)
@@ -603,4 +619,3 @@ def show_result(win_tile, rw, sw, self_draw, fl, kb, lt, rk, ss, mode, base, per
 
 if __name__ == "__main__":
     main()
-
