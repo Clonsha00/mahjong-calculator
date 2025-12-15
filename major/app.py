@@ -279,7 +279,7 @@ class TaiCalculator:
 # 3. Streamlit 介面 (Mobile Friendly Optimized)
 # ==========================================
 def get_tile_name(tid, simple=False):
-    # 簡化顯示，適合手機
+    # 簡化顯示
     if tid < 9: return f"{tid+1}萬"
     elif tid < 18: return f"{tid-8}筒"
     elif tid < 27: return f"{tid-17}索"
@@ -295,13 +295,10 @@ def main():
     if 'input_mode' not in st.session_state: st.session_state.input_mode = "normal"
     if 'multiplier' not in st.session_state: st.session_state.multiplier = 1
     
-    # --- Mobile CSS 優化 ---
-    # 修正重點：
-    # 1. 強制按鈕文字顏色為黑色 (解決 Dark Mode 看不見字的問題)
-    # 2. 調整按鈕間距與高度
+    # --- CSS: 修正按鈕字體顏色與九宮格佈局 ---
     st.markdown("""
     <style>
-    /* 全局間距縮減 */
+    /* 縮減邊界 */
     .block-container {
         padding-top: 1rem;
         padding-bottom: 2rem;
@@ -309,26 +306,29 @@ def main():
         padding-right: 0.5rem;
     }
     
-    /* 按鈕樣式：強制黑字白底，避免深色模式看不見 */
+    /* 按鈕樣式 (強制顯色)：白底黑字，確保 Dark Mode 可見 */
     div.stButton > button {
         width: 100%;
-        height: 3.2rem;
+        height: 3.5rem;
         border-radius: 8px;
-        font-size: 1.2rem;
+        font-size: 1.3rem; /* 字體加大 */
         font-weight: 700;
-        color: #222222 !important; /* 強制深色文字 */
-        background-color: #f8f9fa !important; /* 強制亮色背景 */
-        border: 1px solid #ced4da !important;
+        
+        /* 關鍵修正：強制顏色，無視主題設定 */
+        color: #000000 !important; 
+        background-color: #f0f2f6 !important;
+        border: 1px solid #d1d5db !important;
+        
         margin-bottom: 0.2rem;
-        transition: background-color 0.1s;
     }
     
+    /* 按下效果 */
     div.stButton > button:active {
         background-color: #e2e6ea !important;
         transform: scale(0.98);
     }
     
-    /* 手牌區塊樣式 (深色背景相容) */
+    /* 手牌顯示區 */
     .hand-display {
         background-color: #e8f4f8;
         padding: 10px;
@@ -358,9 +358,7 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
-    # st.title("🀄 麻將軍師") 
-
-    # --- 1. 設定區 (預設收合) ---
+    # --- 1. 設定區 ---
     with st.expander("⚙️ 設定與規則 (點擊展開)", expanded=False):
         c1, c2 = st.columns(2)
         round_wind = c1.selectbox("圈風", [0,1,2,3], format_func=lambda x: ["東","南","西","北"][x])
@@ -394,7 +392,7 @@ def main():
             st.session_state.drawn_tile = None
             st.rerun()
 
-    # --- 2. 視覺化手牌區 (HUD) ---
+    # --- 2. 手牌顯示 (HUD) ---
     total_units = len(st.session_state.hand_tiles) + len(st.session_state.open_sets) * 3
     if st.session_state.drawn_tile is not None: total_units += 1
     
@@ -423,8 +421,7 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    # --- 3. 鍵盤輸入區 ---
-    # st.caption("操作鍵盤") # 省略標題節省空間
+    # --- 3. 鍵盤輸入區 (九宮格優化版) ---
     tabs = st.tabs(["萬子", "筒子", "索子", "字牌"])
     
     def add_tile(tid):
@@ -476,27 +473,26 @@ def main():
         else:
              multiplier = 1
 
-    # 繪製鍵盤 (重點修正：使用分列渲染，而非一大欄)
-    # 原本問題：一次生成 st.columns(3) 然後填入，導致手機上變成 3 個長長的垂直欄。
-    # 修正：每 3 個按鈕就生成一個新的 Row (st.columns(3))，確保視覺上一定是 3xN 網格。
+    # --- 關鍵修正：九宮格渲染邏輯 ---
     suits = [range(0,9), range(9,18), range(18,27), range(27,34)]
+    
     for idx, suit_range in enumerate(suits):
         with tabs[idx]:
-            # 將 range 轉為 list 以便切片
+            # 將 range 轉為 list
             tiles = list(suit_range)
-            # 每 3 個一組進行渲染
+            # 每 3 個一組，建立一列 (Row)
+            # 這樣可以保證 1,2,3 永遠在同一層，不會變成垂直 1,4,7
             for i in range(0, len(tiles), 3):
                 row_tiles = tiles[i:i+3]
-                cols = st.columns(3)
+                cols = st.columns(3) # 建立 3 個並排的欄位
                 for j, tid in enumerate(row_tiles):
                     label = get_tile_name(tid)
-                    if len(label) > 1 and label.endswith("萬"): label = label # 保持原樣
-                    
+                    # 這裡按鈕使用 cols[j] 填入，確保水平排列
                     if cols[j].button(label, key=f"btn_{tid}"):
                         add_tile(tid)
                         st.rerun()
 
-    # --- 4. 功能按鈕區 ---
+    # --- 4. 功能與重置 ---
     st.write("") 
     c_del, c_clr = st.columns(2)
     if c_del.button("⌫ 刪除一張", type="secondary"):
@@ -514,7 +510,7 @@ def main():
         st.session_state.drawn_tile = None
         st.rerun()
 
-    # --- 5. 智慧分析結果 ---
+    # --- 5. 分析結果 ---
     st.markdown("---")
     
     if total_units == 16 and st.session_state.drawn_tile is None:
@@ -523,7 +519,7 @@ def main():
             st.info("尚未聽牌")
         else:
             st.success(f"🔥 聽牌：{len(waiting)} 洞")
-            # 修正：聽牌結果也使用分列渲染，避免跑版
+            # 聽牌結果也使用 Row 邏輯渲染
             for i in range(0, len(waiting), 4):
                 w_row = waiting[i:i+4]
                 w_cols = st.columns(4)
