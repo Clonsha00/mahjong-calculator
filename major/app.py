@@ -1,7 +1,7 @@
 import streamlit as st
 
 # ==========================================
-# 1. 演算法核心 (完全保持不變)
+# 1. 演算法核心 (保持不變)
 # ==========================================
 class MahjongLogic:
     TILES_34 = 34
@@ -276,7 +276,7 @@ class TaiCalculator:
         return False
 
 # ==========================================
-# 3. Streamlit 介面 (CSS 強制修正版)
+# 3. Streamlit 介面 (流動佈局版)
 # ==========================================
 def get_tile_name(tid, simple=False):
     if tid < 9: return f"{tid+1}萬"
@@ -294,65 +294,64 @@ def main():
     if 'input_mode' not in st.session_state: st.session_state.input_mode = "normal"
     if 'multiplier' not in st.session_state: st.session_state.multiplier = 1
     
-    # --- CSS: 核彈級強制橫排修正 ---
-    # 原因：Streamlit 手機版會用 media query 強制把 flex-direction 設為 column。
-    # 解法：我們針對所有 stHorizontalBlock (並排容器) 強制設為 row !important，並鎖死 column 寬度。
+    # --- CSS: 流動佈局 (Flow Layout) 核心 ---
+    # 思路：不使用 st.columns，而是將按鈕視為 inline-block 的方塊，設定寬度 33% 讓其自動換行
     st.markdown("""
     <style>
-    /* 縮減邊界 */
+    /* 調整間距 */
     .block-container {
         padding-top: 1rem;
-        padding-bottom: 2rem;
+        padding-bottom: 3rem;
         padding-left: 0.5rem;
         padding-right: 0.5rem;
     }
     
-    /* 【核彈級修正】強制所有水平區塊在手機上保持水平排列 
-       這會覆寫 Streamlit 預設的手機版垂直堆疊行為
+    /* 【核心魔法】針對 Tab 內的內容容器 
+       強制內部元素 (element-container) 變成水平排列並換行
     */
-    [data-testid="stHorizontalBlock"] {
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        overflow-x: hidden !important; /* 避免橫向卷軸 */
-    }
-
-    /* 【核彈級修正】強制欄位寬度平均分配，不允許換行
-       設定 flex-basis 為 0 並允許成長，確保 3 個按鈕平分寬度
-    */
-    [data-testid="column"] {
-        flex: 1 1 0px !important;
-        min-width: 0px !important;
-        width: auto !important;
-        padding: 0px 2px !important; /* 稍微縮小間距 */
+    div[data-testid="stTabContent"] div[data-testid="stVerticalBlock"] {
+        flex-direction: row !important; /* 強制橫向 */
+        flex-wrap: wrap !important;     /* 允許換行 */
+        display: flex !important;
+        gap: 0px !important;            /* 消除預設間距，由 padding 控制 */
     }
     
-    /* 按鈕樣式：白底黑字，避免 Dark Mode 看不見 */
+    /* 設定每個按鈕容器佔 1/3 寬度 */
+    div[data-testid="stTabContent"] div[data-testid="element-container"] {
+        width: 33.33% !important; 
+        min-width: 33.33% !important;
+        flex: 0 0 auto !important;
+        padding: 2px !important;
+        display: flex !important;
+        justify-content: center;
+    }
+    
+    /* 按鈕本體樣式：強制黑字白底 */
     div.stButton > button {
         width: 100% !important;
-        height: 3.5rem !important;
-        border-radius: 8px !important;
-        font-size: 1.1rem !important; /* 字體稍微縮小以防跑版 */
-        font-weight: 700 !important;
-        padding: 0px !important; /* 去除內距以塞入更多字 */
+        height: 3.8rem !important; /* 稍微加高 */
+        border-radius: 10px !important;
+        font-size: 1.2rem !important;
+        font-weight: 800 !important;
         
-        /* 強制顏色 */
         color: #000000 !important; 
-        background-color: #f0f2f6 !important;
-        border: 1px solid #d1d5db !important;
-        margin-bottom: 0.2rem !important;
+        background-color: #f8f9fa !important;
+        border: 2px solid #e9ecef !important;
+        margin: 0px !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
     }
     
     div.stButton > button:active {
-        background-color: #e2e6ea !important;
-        transform: scale(0.98);
+        background-color: #dee2e6 !important;
+        transform: translateY(2px);
     }
     
-    /* 手牌顯示區 */
+    /* HUD 手牌區 */
     .hand-display {
-        background-color: #e8f4f8;
+        background-color: #e3f2fd;
         padding: 10px;
-        border-radius: 10px;
-        border: 2px solid #2e86de;
+        border-radius: 12px;
+        border: 2px solid #90caf9;
         margin-bottom: 10px;
         text-align: center;
         color: #333; 
@@ -360,19 +359,19 @@ def main():
     .tile-span {
         display: inline-block;
         background: white;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        padding: 2px 5px; /* 縮小 padding */
-        margin: 1px;
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+        padding: 2px 6px;
+        margin: 2px;
         font-weight: bold;
-        color: #333;
-        font-size: 1.0em;
-        min-width: 1.5em;
+        color: #212529;
+        font-size: 1.1em;
+        box-shadow: 0 1px 1px rgba(0,0,0,0.1);
     }
     .drawn-tile-span {
-        background: #ff6b6b;
+        background: #ff8787;
         color: white;
-        border: 1px solid #c0392b;
+        border: 1px solid #fa5252;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -440,7 +439,7 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    # --- 3. 鍵盤輸入區 ---
+    # --- 3. 鍵盤輸入區 (新思維：流動佈局) ---
     tabs = st.tabs(["萬子", "筒子", "索子", "字牌"])
     
     def add_tile(tid):
@@ -492,22 +491,18 @@ def main():
         else:
              multiplier = 1
 
-    # --- 渲染鍵盤 (維持 Row 邏輯 + 強力 CSS) ---
+    # --- 渲染鍵盤 (完全放棄 st.columns) ---
     suits = [range(0,9), range(9,18), range(18,27), range(27,34)]
     
     for idx, suit_range in enumerate(suits):
         with tabs[idx]:
-            tiles = list(suit_range)
-            # 每 3 個按鈕放進一個 st.columns(3)
-            # 依賴上方的 [data-testid="stHorizontalBlock"] CSS 讓它們不准換行
-            for i in range(0, len(tiles), 3):
-                row_tiles = tiles[i:i+3]
-                cols = st.columns(3) 
-                for j, tid in enumerate(row_tiles):
-                    label = get_tile_name(tid)
-                    if cols[j].button(label, key=f"btn_{tid}"):
-                        add_tile(tid)
-                        st.rerun()
+            # 直接迴圈生成按鈕，不使用 columns
+            # CSS 會負責把這些按鈕變成 33% 寬度並排列成網格
+            for tid in suit_range:
+                label = get_tile_name(tid)
+                if st.button(label, key=f"btn_{tid}"):
+                    add_tile(tid)
+                    st.rerun()
 
     # --- 4. 功能與重置 ---
     st.write("") 
@@ -536,11 +531,15 @@ def main():
             st.info("尚未聽牌")
         else:
             st.success(f"🔥 聽牌：{len(waiting)} 洞")
-            for i in range(0, len(waiting), 4):
-                w_row = waiting[i:i+4]
-                w_cols = st.columns(4)
-                for j, w in enumerate(w_row):
-                    if w_cols[j].button(f"胡 {get_tile_name(w)}", key=f"win_{w}", type="primary"):
+            # 聽牌這裡也可以用流動佈局，但為了簡單，我們使用 columns 並搭配之前的 CSS
+            # 不過因為 CSS 針對了 Tab 內部，這裡在 Tab 外，會是正常的垂直或水平
+            # 為了手機體驗，我們一樣用流動佈局容器包起來
+            with st.container():
+                st.markdown('<div class="waiting-grid">', unsafe_allow_html=True)
+                cols = st.columns(4) # 這裡如果手機變直列也無妨，但我們希望它好看
+                # 使用簡單的 column 即可，下面的按鈕不需太嚴格
+                for i, w in enumerate(waiting):
+                    if cols[i%4].button(f"胡 {get_tile_name(w)}", key=f"win_{w}", type="primary"):
                         show_result(w, round_wind, seat_wind, is_self_draw, flowers, 
                                     is_kong_bloom, is_last_tile, is_robbing_kong, is_seven_snatch,
                                     rule_mode, base_money, tai_money)
