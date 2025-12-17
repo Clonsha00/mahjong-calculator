@@ -1,176 +1,137 @@
-import streamlit as st
-from st_clickable_images import clickable_images
-import time
+import tkinter as tk
+from tkinter import font
 
-# --- 1. 頁面設定 ---
-st.set_page_config(page_title="🀄 台灣麻將台數計算器", layout="wide")
+class MahjongConverter:
+    """
+    負責處理麻將代號與 Unicode 轉換的類別
+    """
+    def __init__(self):
+        # 建立代號與 Unicode 的對照表
+        self.map = {}
+        self._build_map()
 
-# 自訂 CSS 讓介面更好看
-st.markdown("""
-<style>
-    .stButton>button {
-        width: 100%;
-        font-weight: bold;
-    }
-    .main-header {
-        text-align: center; 
-        font-size: 2rem; 
-        margin-bottom: 20px;
-    }
-</style>
-""", unsafe_allow_html=True)
+    def _build_map(self):
+        # 1. 萬子 (1m - 9m) -> U+1F007 ~ U+1F00F
+        base_wan = 0x1F007
+        for i in range(1, 10):
+            self.map[f"{i}m"] = chr(base_wan + i - 1)
 
-st.markdown('<div class="main-header">🀄 台灣麻將台數計算器 (視覺版)</div>', unsafe_allow_html=True)
+        # 2. 條子/索子 (1s - 9s) -> U+1F010 ~ U+1F018
+        base_sou = 0x1F010
+        for i in range(1, 10):
+            self.map[f"{i}s"] = chr(base_sou + i - 1)
 
-# --- 2. 狀態初始化 (Session State) ---
-if "hand" not in st.session_state:
-    st.session_state.hand = [] # 存入手牌代碼
-if "msg" not in st.session_state:
-    st.session_state.msg = ""  # 系統訊息
+        # 3. 筒子 (1p - 9p) -> U+1F019 ~ U+1F021
+        base_pin = 0x1F019
+        for i in range(1, 10):
+            self.map[f"{i}p"] = chr(base_pin + i - 1)
 
-# --- 3. 定義麻將資料結構與圖片 ---
-def get_tile_image_url(code):
-    # 這裡使用 Placeholder 圖片服務生成麻將圖 (正式版請換成您自己的圖片路徑)
-    # 根據花色給不同的文字顏色
-    color_map = {'m': 'darkred', 'p': 'blue', 's': 'green', 'z': 'black'}
-    color = color_map.get(code[-1], 'black')
-    return f"https://placehold.co/60x80/EEE/{color}?text={code}&font=roboto"
+        # 4. 字牌 (1z - 7z): 東南西北中發白
+        # 風牌: 東南西北 (1z-4z) -> U+1F000 ~ U+1F003
+        honors = ['1z', '2z', '3z', '4z'] 
+        honor_codes = [0x1F000, 0x1F001, 0x1F002, 0x1F003]
+        
+        # 三元牌: 中發白 (5z-7z) -> U+1F004 ~ U+1F006
+        dragons = ['5z', '6z', '7z']
+        dragon_codes = [0x1F004, 0x1F005, 0x1F006]
 
-categories = {
-    "萬子 (Man)": [f"{i}m" for i in range(1, 10)],
-    "筒子 (Pin)": [f"{i}p" for i in range(1, 10)],
-    "索子 (Sou)": [f"{i}s" for i in range(1, 10)],
-    "字牌 (Zi)":  ["1z", "2z", "3z", "4z", "5z", "6z", "7z"] # 東南西北中發白
-}
+        for code, unicode_val in zip(honors + dragons, honor_codes + dragon_codes):
+            self.map[code] = chr(unicode_val)
 
-# 建立所有可選圖片的清單
-all_tiles_list = []
-all_images_urls = []
+        # 5. 花牌 (1f - 8f) 
+        # 春夏秋冬(1-4f) + 梅蘭菊竹(5-8f)
+        # 注意：Unicode 順序通常是梅蘭菊竹(U+1F026..), 春夏秋冬(U+1F022..)
+        # 這裡依台灣常見習慣對應
+        flowers = ['1f', '2f', '3f', '4f', '5f', '6f', '7f', '8f']
+        # 對應 Unicode: 春, 夏, 秋, 冬, 梅, 蘭, 菊, 竹
+        flower_unicodes = [0x1F022, 0x1F023, 0x1F024, 0x1F025, 
+                           0x1F026, 0x1F027, 0x1F028, 0x1F029]
+        
+        for code, val in zip(flowers, flower_unicodes):
+            self.map[code] = chr(val)
 
-for cat_name, tiles in categories.items():
-    for tile in tiles:
-        all_tiles_list.append(tile)
-        all_images_urls.append(get_tile_image_url(tile))
+    def get_tile(self, code):
+        """傳入代號 (如 '1m')，回傳 Unicode 符號"""
+        return self.map.get(code, "?") # 找不到回傳 ?
 
-# --- 4. 側邊欄：環境設定 ---
-with st.sidebar:
-    st.header("⚙️ 環境設定")
-    prevailing_wind = st.selectbox("圈風 (Prevailing Wind)", ["東", "南", "西", "北"])
-    seat_wind = st.selectbox("門風 (Seat Wind)", ["東", "南", "西", "北"])
+    def convert_string(self, text_input):
+        """
+        將一串文字 '1m 2p 3s' 轉換成符號串
+        範例輸入: "1m 5z 2p"
+        範例輸出: "🀇 🀄 🀚"
+        """
+        result = []
+        # 簡單的解析：以空格分隔
+        tokens = text_input.split()
+        for t in tokens:
+            result.append(self.get_tile(t))
+        return " ".join(result)
+
+# --- 以下是 Tkinter 介面測試程式 ---
+def main():
+    converter = MahjongConverter()
     
-    st.markdown("---")
-    st.write("### 特殊選項")
-    is_self_drawn = st.checkbox("自摸 (Self-drawn)", value=True)
-    flower_count = st.number_input("花牌數量", min_value=0, max_value=8, value=0)
+    root = tk.Tk()
+    root.title("麻將 Unicode 符號檢視器")
+    root.geometry("600x500")
+
+    # 設定字型：Windows 推薦 Segoe UI Symbol 以確保顯示正常
+    # 如果顯示方塊，請嘗試改為 "Arial Unicode MS" 或 "SimSun"
+    my_font = font.Font(family="Segoe UI Symbol", size=24)
+    label_font = font.Font(family="Microsoft JhengHei", size=12)
+
+    # 1. 顯示所有牌型
+    frame_all = tk.LabelFrame(root, text="所有牌型總覽", padx=10, pady=10)
+    frame_all.pack(fill="x", padx=10, pady=5)
+
+    # 萬子列
+    tk.Label(frame_all, text="萬子 (m):", font=label_font).grid(row=0, column=0, sticky="e")
+    wan_str = "".join([converter.get_tile(f"{i}m") for i in range(1, 10)])
+    tk.Label(frame_all, text=wan_str, font=my_font).grid(row=0, column=1, sticky="w")
+
+    # 條子列
+    tk.Label(frame_all, text="條子 (s):", font=label_font).grid(row=1, column=0, sticky="e")
+    sou_str = "".join([converter.get_tile(f"{i}s") for i in range(1, 10)])
+    tk.Label(frame_all, text=sou_str, font=my_font).grid(row=1, column=1, sticky="w")
+
+    # 筒子列
+    tk.Label(frame_all, text="筒子 (p):", font=label_font).grid(row=2, column=0, sticky="e")
+    pin_str = "".join([converter.get_tile(f"{i}p") for i in range(1, 10)])
+    tk.Label(frame_all, text=pin_str, font=my_font).grid(row=2, column=1, sticky="w")
+
+    # 字牌列
+    tk.Label(frame_all, text="字牌 (z):", font=label_font).grid(row=3, column=0, sticky="e")
+    honor_str = "".join([converter.get_tile(f"{i}z") for i in range(1, 8)])
+    tk.Label(frame_all, text=honor_str, font=my_font).grid(row=3, column=1, sticky="w")
     
-    st.markdown("---")
-    if st.button("🗑️ 重置所有設定"):
-        st.session_state.hand = []
-        st.session_state.msg = "已重置"
-        st.rerun()
+    # 花牌列
+    tk.Label(frame_all, text="花牌 (f):", font=label_font).grid(row=4, column=0, sticky="e")
+    flower_str = "".join([converter.get_tile(f"{i}f") for i in range(1, 9)])
+    tk.Label(frame_all, text=flower_str, font=my_font).grid(row=4, column=1, sticky="w")
 
-# --- 5. 主畫面：選牌區域 ---
-st.info("👇 請直接點擊下方麻將牌加入手牌 (最多 17 張)")
+    # 2. 互動測試區
+    frame_test = tk.LabelFrame(root, text="轉換測試 (輸入代號如: 1m 5z 2p)", padx=10, pady=10)
+    frame_test.pack(fill="x", padx=10, pady=5)
 
-# 選牌區塊 (Method 3)
-clicked_index = clickable_images(
-    paths=all_images_urls,
-    titles=[f"加入 {t}" for t in all_tiles_list],
-    div_style={
-        "display": "flex",
-        "justify-content": "center",
-        "flex-wrap": "wrap",
-        "background-color": "#f8f9fa",
-        "padding": "15px",
-        "border-radius": "10px",
-        "border": "1px solid #ddd"
-    },
-    img_style={
-        "margin": "3px",
-        "height": "55px",
-        "cursor": "pointer",
-        "border-radius": "4px",
-        "transition": "transform 0.1s"
-    },
-    key="selection_grid"
-)
+    entry = tk.Entry(frame_test, font=("Consolas", 14))
+    entry.pack(side="left", fill="x", expand=True, padx=5)
+    entry.insert(0, "1m 2m 3m 5z 5z 6z") # 預設值
 
-# 處理選牌點擊
-if clicked_index > -1:
-    selected_tile = all_tiles_list[clicked_index]
-    if len(st.session_state.hand) < 17:
-        st.session_state.hand.append(selected_tile)
-    else:
-        st.session_state.msg = "⚠️ 手牌已滿 (17張)！請先移除部分牌。"
+    result_label = tk.Label(frame_test, text="", font=my_font, fg="blue")
+    result_label.pack(side="left", padx=10)
 
-# --- 6. 顯示目前手牌 (橫向排列版) ---
-st.divider()
-st.subheader("🤚 目前手牌")
+    def on_convert():
+        txt = entry.get()
+        res = converter.convert_string(txt)
+        result_label.config(text=res)
 
-# 顯示系統訊息
-if st.session_state.msg:
-    st.success(f"💡 {st.session_state.msg}")
-    st.session_state.msg = "" 
+    btn = tk.Button(frame_test, text="轉換顯示", command=on_convert, font=label_font)
+    btn.pack(side="left")
 
-if st.session_state.hand:
-    # 1. 排序手牌
-    def sort_key(tile):
-        order_map = {'m': 1, 'p': 2, 's': 3, 'z': 4}
-        cat_score = order_map.get(tile[-1], 99)
-        num_score = int(tile[0])
-        return (cat_score, num_score)
-    
-    sorted_hand = sorted(st.session_state.hand, key=sort_key)
-    hand_images_urls = [get_tile_image_url(t) for t in sorted_hand]
+    # 初始執行一次
+    on_convert()
 
-    # 2. 顯示橫向手牌
-    st.markdown("👇 **點擊手牌可移除該張牌**")
-    
-    clicked_hand_index = clickable_images(
-        paths=hand_images_urls,
-        titles=[f"移除 {t}" for t in sorted_hand],
-        div_style={
-            "display": "flex",
-            "justify-content": "center",
-            "align-items": "center",
-            "flex-wrap": "wrap",
-            "background-color": "#e0e5ec",
-            "padding": "20px",
-            "border-radius": "15px",
-            "box-shadow": "inset 2px 2px 5px #b8b9be, inset -3px -3px 7px #fff"
-        },
-        img_style={
-            "margin": "1px",  # 緊湊排列
-            "height": "65px", 
-            "cursor": "pointer",
-            "box-shadow": "2px 2px 5px rgba(0,0,0,0.2)"
-        },
-        key="hand_display" # 避免 Key 衝突
-    )
+    root.mainloop()
 
-    # 3. 處理丟牌邏輯
-    if clicked_hand_index > -1:
-        removed_tile = sorted_hand[clicked_hand_index]
-        st.session_state.hand.remove(removed_tile)
-        st.session_state.msg = f"已移除一張 {removed_tile}"
-        st.rerun()
-
-    if st.button("🧹 清空所有手牌"):
-        st.session_state.hand = []
-        st.rerun()
-
-else:
-    st.info("尚未選擇任何牌...")
-
-# --- 7. 計算邏輯區域 ---
-st.divider()
-st.subheader("🧮 計算結果")
-
-if st.button("開始計算台數", type="primary"):
-    if len(st.session_state.hand) not in [14, 17]:
-        st.error(f"牌數錯誤！目前 {len(st.session_state.hand)} 張。一般胡牌應為 17 張。")
-    else:
-        with st.spinner("正在分析牌型..."):
-            time.sleep(0.5)
-            # 這裡放入台數計算結果
-            st.success("計算完成！(此處需連接 Python 演算法)")
+if __name__ == "__main__":
+    main()
