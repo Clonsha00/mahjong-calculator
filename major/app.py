@@ -1,142 +1,171 @@
 import streamlit as st
+from collections import Counter
 
-# === 工具函式：清洗隱形字元 ===
-def clean_mahjong_tile(text):
-    """
-    移除 Unicode 的變體選擇符：
-    \ufe0f (VS16 - Emoji Style)
-    \ufe0e (VS15 - Text Style)
-    並去除前後空白
-    """
-    if not text:
-        return ""
-    return text.replace('\ufe0f', '').replace('\ufe0e', '').strip()
+# --- 設定頁面配置 ---
+st.set_page_config(page_title="台灣麻將台數計算機", layout="wide")
 
-class MahjongConverter:
-    def __init__(self):
-        self.map = {}         # Code -> Symbol (ex: '5z' -> '🀄')
-        self.reverse_map = {} # Symbol -> Code (ex: '🀄' -> '5z')
-        self._build_map()
+# --- 初始化 Session State (儲存變數) ---
+if 'hand_tiles' not in st.session_state:
+    st.session_state.hand_tiles = []  # 手牌 (最多16張)
+if 'winning_tile' not in st.session_state:
+    st.session_state.winning_tile = None  # 胡的那張牌 (第17張)
+if 'flower_tiles' not in st.session_state:
+    st.session_state.flower_tiles = []  # 花牌
 
-    def _build_map(self):
-        # 1. 萬子
-        base_wan = 0x1F007
-        for i in range(1, 10):
-            self.map[f"{i}m"] = chr(base_wan + i - 1)
-        # 2. 條子
-        base_sou = 0x1F010
-        for i in range(1, 10):
-            self.map[f"{i}s"] = chr(base_sou + i - 1)
-        # 3. 筒子
-        base_pin = 0x1F019
-        for i in range(1, 10):
-            self.map[f"{i}p"] = chr(base_pin + i - 1)
+# --- 定義牌的資料 ---
+TILES = {
+    "萬": [f"{i}萬" for i in range(1, 10)],
+    "筒": [f"{i}筒" for i in range(1, 10)],
+    "條": [f"{i}條" for i in range(1, 10)],
+    "字": ["東", "南", "西", "北", "中", "發", "白"],
+    "花": ["春", "夏", "秋", "冬", "梅", "蘭", "竹", "菊"]
+}
+
+# --- 輔助函式：新增牌 ---
+def add_tile(tile, category):
+    # 處理花牌
+    if category == "花":
+        if tile not in st.session_state.flower_tiles:
+            st.session_state.flower_tiles.append(tile)
+        return
+
+    # 處理手牌與胡牌
+    current_count = len(st.session_state.hand_tiles)
+    has_winning = st.session_state.winning_tile is not None
+
+    # 1. 如果還沒滿16張，加到手牌
+    if current_count < 16:
+        st.session_state.hand_tiles.append(tile)
+    # 2. 如果手牌滿16張，且還沒選胡牌，則設定為胡牌
+    elif current_count == 16 and not has_winning:
+        st.session_state.winning_tile = tile
+    else:
+        st.warning("牌數已滿 (16張手牌 + 1張胡牌)！請先刪除部分牌再新增。")
+
+# --- 輔助函式：重置 ---
+def reset_game():
+    st.session_state.hand_tiles = []
+    st.session_state.winning_tile = None
+    st.session_state.flower_tiles = []
+
+# --- 核心邏輯：計算台數 (範例) ---
+def calculate_tai():
+    hand = st.session_state.hand_tiles + ([st.session_state.winning_tile] if st.session_state.winning_tile else [])
+    flowers = st.session_state.flower_tiles
+    
+    tai_details = []
+    total_tai = 0
+    
+    # 計算所有牌的數量
+    counts = Counter(hand)
+    
+    # 1. 花牌計台 (簡單示範：有花就加)
+    if len(flowers) > 0:
+        tai_details.append(f"花牌 x{len(flowers)} ({len(flowers)}台)")
+        total_tai += len(flowers)
         
-        # 4. 字牌
-        honors = ['1z', '2z', '3z', '4z'] 
-        honor_codes = [0x1F000, 0x1F001, 0x1F002, 0x1F003]
-        
-        # 5. 三元牌 (標準設定)
-        dragons = ['5z', '6z', '7z'] 
-        dragon_codes = [0x1F004, 0x1F005, 0x1F006] # 紅中🀄, 青發🀅, 白板🀆
-        
-        for code, unicode_val in zip(honors + dragons, honor_codes + dragon_codes):
-            self.map[code] = chr(unicode_val)
-
-        # 6. 花牌
-        flowers = ['1f', '2f', '3f', '4f', '5f', '6f', '7f', '8f']
-        flower_unicodes = [0x1F022, 0x1F023, 0x1F024, 0x1F025, 
-                           0x1F026, 0x1F027, 0x1F028, 0x1F029]
-        for code, val in zip(flowers, flower_unicodes):
-            self.map[code] = chr(val)
-
-        # === 建立反向查詢表 (Symbol -> Code) ===
-        # 這樣我們就能知道 '🀄' 對應 '5z'
-        for code, symbol in self.map.items():
-            self.reverse_map[symbol] = code
-
-    def get_tile(self, code):
-        return self.map.get(code, "?")
-
-    def get_code(self, symbol):
-        """反向查詢：給符號，回傳代號"""
-        # 這裡也要先清洗一下，確保安全
-        clean_s = clean_mahjong_tile(symbol)
-        return self.reverse_map.get(clean_s, "未知")
-
-    def convert_string_html(self, text_input):
-        result = []
-        tokens = text_input.split()
-        for t in tokens:
-            char = self.get_tile(t)
-            result.append(f"<span>{char}</span>")
-        return " ".join(result)
-
-def main():
-    st.set_page_config(page_title="麻將符號工具箱", page_icon="🀄")
-    st.title("🀄 麻將 Unicode 工具箱")
-
-    converter = MahjongConverter()
-
-    # 使用 Tabs 分頁功能，讓介面更乾淨
-    tab1, tab2 = st.tabs(["🔤 代號轉符號 (Viewer)", "🧽 符號清洗與反查 (Cleaner)"])
-
-    # === Tab 1: 原本的功能 ===
-    with tab1:
-        st.subheader("常用牌型展示")
-        cols = st.columns(4)
-        cols[0].markdown("**萬子**")
-        cols[0].markdown(f"<div style='font-size: 32px;'>{converter.convert_string_html('1m 2m 3m')}...</div>", unsafe_allow_html=True)
-        cols[1].markdown("**條子**")
-        cols[1].markdown(f"<div style='font-size: 32px;'>{converter.convert_string_html('1s 2s 3s')}...</div>", unsafe_allow_html=True)
-        cols[2].markdown("**筒子**")
-        cols[2].markdown(f"<div style='font-size: 32px;'>{converter.convert_string_html('1p 2p 3p')}...</div>", unsafe_allow_html=True)
-        cols[3].markdown("**字牌**")
-        cols[3].markdown(f"<div style='font-size: 32px;'>{converter.convert_string_html('5z 6z 7z')}</div>", unsafe_allow_html=True)
-
-        st.divider()
-        user_input = st.text_input("輸入代號 (例如: 1m 5z 6z)", value="1m 5z 6z 7z", key="input_code")
-        if user_input:
-            result = converter.convert_string_html(user_input)
-            st.markdown(f"<div style='font-size: 60px; text-align: center; border: 1px solid #ddd; padding: 10px; border-radius: 10px;'>{result}</div>", unsafe_allow_html=True)
-
-    # === Tab 2: 新增的功能 (清洗與反查) ===
-    with tab2:
-        st.subheader("🕵️‍♂️ 符號清洗與識別")
-        st.info("這裡示範如何處理帶有「隱形字元」的麻將符號。")
-
-        # 這裡故意提供一個帶有隱形字元的預設值 (🀄 + \ufe0e)
-        dirty_default = "🀄︎" 
-        
-        paste_input = st.text_input("貼上一個麻將符號 (可嘗試貼上外部複製的牌)", value=dirty_default, key="input_symbol")
-
-        if paste_input:
-            col1, col2 = st.columns(2)
+    # 2. 三元牌 (中發白) 刻子
+    for dragon in ["中", "發", "白"]:
+        if counts[dragon] >= 3:
+            tai_details.append(f"{dragon}刻 (1台)")
+            total_tai += 1
             
-            # 1. 原始狀態分析
-            raw_repr = ascii(paste_input) # 取得 Python 內部表示法 (會顯示 \ufe0e)
-            with col1:
-                st.markdown("🔴 **原始輸入 (Before)**")
-                st.code(f"內容: {paste_input}\n長度: {len(paste_input)}\n編碼: {raw_repr}")
-                if "\\ufe0" in raw_repr:
-                    st.warning("⚠️ 檢測到隱形變體選擇符！")
-                else:
-                    st.success("✅ 輸入很乾淨")
+    # 3. 風牌刻子 (這裡假設不是圈風門風，單純有刻子不算台，除非你是設定碰碰胡，這裡僅作示範)
+    # 若要精確計算，需要使用者輸入「圈風」與「門風」
+    
+    # 4. 清一色 / 混一色 判斷邏輯 (示範)
+    suits = set()
+    for t in hand:
+        if "萬" in t: suits.add("萬")
+        elif "筒" in t: suits.add("筒")
+        elif "條" in t: suits.add("條")
+        elif t in ["東", "南", "西", "北", "中", "發", "白"]: suits.add("字")
+    
+    if len(suits) == 1 and "字" not in suits:
+        tai_details.append("清一色 (8台)")
+        total_tai += 8
+    elif len(suits) == 2 and "字" in suits and len(suits - {"字"}) == 1:
+        tai_details.append("混一色 (4台)")
+        total_tai += 4
 
-            # 2. 清洗與識別
-            cleaned_text = clean_mahjong_tile(paste_input)
-            identified_code = converter.get_code(cleaned_text)
-            
-            with col2:
-                st.markdown("🟢 **清洗後 (After)**")
-                st.code(f"內容: {cleaned_text}\n長度: {len(cleaned_text)}\n編碼: {ascii(cleaned_text)}")
-                
-                if identified_code != "未知":
-                    st.success(f"🎉 識別成功！這是：**{identified_code}**")
-                    # 顯示大圖
-                    st.markdown(f"<div style='font-size: 50px;'>{cleaned_text}</div>", unsafe_allow_html=True)
-                else:
-                    st.error("❌ 無法識別此符號 (不在麻將表中)")
+    # TODO: 這裡可以加入更複雜的演算法來判斷「碰碰胡」、「平胡」等
+    # 這需要將手牌進行拆解 (Backtracking Algorithm)
+    
+    return total_tai, tai_details
 
-if __name__ == "__main__":
-    main()
+# --- UI 介面 ---
+st.title("🀄 台灣麻將台數計算機")
+
+col_display, col_controls = st.columns([2, 1])
+
+with col_controls:
+    if st.button("🔄 重置所有牌", type="primary"):
+        reset_game()
+        st.rerun()
+
+# --- 顯示目前手牌 ---
+st.markdown("### 🎴 目前手牌")
+hand_container = st.container(border=True)
+
+with hand_container:
+    # 顯示手牌 (排序是為了美觀，實際順序不影響計算)
+    sorted_hand = sorted(st.session_state.hand_tiles)
+    st.write(f"**手牌 ({len(st.session_state.hand_tiles)}/16):**")
+    
+    # 使用 columns 小技巧來顯示牌，比較好看
+    if sorted_hand:
+        cols = st.columns(17)
+        for idx, tile in enumerate(sorted_hand):
+            cols[idx].button(tile, key=f"hand_{idx}", disabled=True) # 僅顯示用
+    else:
+        st.info("尚未選擇手牌")
+
+    st.write("---")
+    
+    # 顯示胡牌 (第17張)
+    st.write("**🖐️ 胡牌 / 摸牌 (第17張):**")
+    if st.session_state.winning_tile:
+        st.button(st.session_state.winning_tile, key="win_tile_btn", type="primary")
+        if st.button("❌ 移除胡牌"):
+            st.session_state.winning_tile = None
+            st.rerun()
+    else:
+        st.caption("請選滿16張後，選取第17張")
+
+    # 顯示花牌
+    if st.session_state.flower_tiles:
+        st.write("---")
+        st.write(f"**🌸 花牌 ({len(st.session_state.flower_tiles)}):** " + " ".join(st.session_state.flower_tiles))
+
+# --- 按鈕輸入區 ---
+st.markdown("### ➕ 選擇牌型")
+tabs = st.tabs(["萬子", "筒子", "條子", "字牌", "花牌"])
+
+def create_buttons(tile_list, category):
+    cols = st.columns(5) # 一行5個按鈕
+    for i, tile in enumerate(tile_list):
+        if cols[i % 5].button(tile):
+            add_tile(tile, category)
+            st.rerun()
+
+with tabs[0]: create_buttons(TILES["萬"], "萬")
+with tabs[1]: create_buttons(TILES["筒"], "筒")
+with tabs[2]: create_buttons(TILES["條"], "條")
+with tabs[3]: create_buttons(TILES["字"], "字")
+with tabs[4]: create_buttons(TILES["花"], "花")
+
+# --- 計算結果 ---
+st.markdown("---")
+if st.button("🧮 開始計算台數", type="primary", use_container_width=True):
+    # 基本檢查
+    if len(st.session_state.hand_tiles) != 16 or st.session_state.winning_tile is None:
+        st.error("❌ 手牌必須是 16 張，且必須有一張胡牌才能計算！")
+    else:
+        score, details = calculate_tai()
+        st.success(f"### 總台數：{score} 台")
+        if details:
+            st.write("詳細項目：")
+            for item in details:
+                st.write(f"- {item}")
+        else:
+            st.write("無特殊牌型 (底台請自行約定)")
